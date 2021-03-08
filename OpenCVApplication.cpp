@@ -789,6 +789,7 @@ int newMain()
 			std::cout << operationValue << "-" << it.first << "\n";
 			operationValue++;
 		}
+		printf(" 0 - Exit\n\n");
 		printf("Option: ");
 		scanf("%d", &op);
 		if (op <= functionSet.size() && op>=1)
@@ -803,98 +804,6 @@ int newMain()
 }
 
 
-
-int oldMain()
-{
-	int op;
-	do
-	{
-		system("cls");
-		destroyAllWindows();
-		printf("Menu:\n");
-		printf(" 1 - Open image\n");
-		printf(" 2 - Open BMP images from folder\n");
-		printf(" 3 - Image negative - diblook style\n");
-		printf(" 4 - BGR->HSV\n");
-		printf(" 5 - Resize image\n");
-		printf(" 6 - Canny edge detection\n");
-		printf(" 7 - Edges in a video sequence\n");
-		printf(" 8 - Snap frame from live video\n");
-		printf(" 9 - Mouse callback demo\n");
-		printf(" 10 - additive factor\n");
-		printf(" 11 - multiplicative factor\n");
-		printf(" 12 - 4 square image\n");
-		printf(" 13 - inverse matrix\n");
-
-		printf(" 0 - Exit\n\n");
-		printf("Option: ");
-		scanf("%d",&op);
-
-
-		switch (op)
-		{
-			case 1:
-				testOpenImage();
-				break;
-			case 2:
-				testOpenImagesFld();
-				break;
-			case 3:
-				testParcurgereSimplaDiblookStyle(); //diblook style
-				break;
-			case 4:
-				//testColor2Gray();
-				testBGR2HSV();
-				break;
-			case 5:
-				testResize();
-				break;
-			case 6:
-				testCanny();
-				break;
-			case 7:
-				testVideoSequence();
-				break;
-			case 8:
-				testSnap();
-				break;
-			case 9:
-				testMouseClick();
-				break;
-			case 10:
-				lab1Problem3();
-				break;
-			case 11:
-				lab1Problem4();
-				break;
-			case 12:
-				lab1Problem5();
-				break;
-			case 13:
-				lab1Problem6();
-				break;
-			case 14:
-				lab2Problem1();
-				break;
-			case 15:
-				lab2Problem2();
-				break;
-			case 16:
-				lab2Problem3();
-				break;
-			case 17:
-				lab2Problem4();
-				break;
-			case 18:
-				testIsInside();
-				break;
-
-			
-		}
-	}
-	while (op!=0);
-	return 0;
-}
 
 int main()
 {
