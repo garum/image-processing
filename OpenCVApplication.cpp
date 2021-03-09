@@ -485,7 +485,7 @@ void lab1Problem4()
 			for (int j = 0; j < width; j++)
 			{
 				uchar val = src.at<uchar>(i, j);
-				val = bound((int)val * multiplicativeFactor);
+				val = bound((int)(val * multiplicativeFactor));
 				dst.at<uchar>(i, j) = val;
 			}
 		}
@@ -511,7 +511,6 @@ void lab1Problem4()
 
 void lab1Problem5()
 {
-	char fname[MAX_PATH];
 	const uchar multiplicativeFactor = 2;
 	
 
@@ -766,9 +765,298 @@ void testIsInside()
 }
 
 
-int newMain()
+
+
+
+
+std::vector<int> computeHistogram(Mat image){
+	std::vector <int> hist(256, 0);
+
+	for (int i = 0; i < image.rows; i++) {
+		for (int j = 0; j < image.cols; j++) {
+			uchar val = image.at<uchar>(i, j);
+			hist[val]++;
+		}
+	}
+	return hist;
+}
+
+std::vector<int> computeHistogram(Mat image,int bins_nr) {
+	std::vector <int> hist(bins_nr, 0);
+	int bin_size = 256 / bins_nr;
+	for (int i = 0; i < image.rows; i++) {
+		for (int j = 0; j < image.cols; j++) {
+			uchar val = image.at<uchar>(i, j);
+			int position = val / bin_size;
+			hist[position]++;
+		}
+	}
+	return hist;
+}
+
+std::vector<float> computePDF(Mat image)
+{
+	std::vector<float> pdf(256,0.0f);
+	std::vector<int> hist;
+	hist = computeHistogram(image);
+	for (int i = 0; i <= 255; i++) {
+		pdf[i] = (float)hist[i] / (float)(image.cols * image.rows);
+	}
+	return pdf;
+}
+
+void displayHistogram()
+{
+	char fname[MAX_PATH];
+
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		
+		std::vector<int> histogram;
+
+		histogram=computeHistogram(src);
+		showHistogram("pixel intensity", histogram.data(), histogram.size(), 200);
+		imshow("input image", src);
+
+		waitKey();
+	}
+}
+
+void displayBinHistogram()
+{
+	char fname[MAX_PATH];
+
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		
+		unsigned int m;
+		std::cout << "introduce the number of bins:";
+		std::cin >> m;
+
+		std::vector<int> histogram;
+		histogram=computeHistogram(src, m);
+		showHistogram("pixel intensity", histogram.data(), histogram.size(), 200);
+		imshow("input image", src);
+
+		waitKey();
+
+	}
+}
+
+
+std::vector<int> computeLocalMaxima(int wh, float threshold,float pdf[])
+{
+
+	std::vector<int> local_maxima;
+	local_maxima.push_back(0);
+
+	for (int k=wh;k<=255-wh;k++)
+	{
+		float v = 0.0f;
+		float maximum = 0.0f;
+		int flag = 1;
+		for (int i = k - wh; i <= k + wh; i++){
+			v += pdf[i];
+
+			if (pdf[i] > pdf[k])
+				flag = 0;
+		}
+
+		v = v / (2 * wh + 1);
+		if (pdf[k] > (v + threshold) && flag == 1)
+		{
+			local_maxima.push_back(k);
+
+		}
+	}
+	local_maxima.push_back(255);
+
+	return local_maxima;
+}
+
+int findClosestValue(std::vector<int> vec, int target)
+{
+	int distance;
+	int ans=0;
+	int min_distance = INT_MAX;
+	for (auto it : vec)
+	{
+		distance = abs(target - it);
+		if (min_distance > distance)
+		{
+			min_distance = distance;
+			ans = it;
+		}
+	}
+	//std::cout << target << " " << ans << "\n";
+	return ans;
+}
+void multiLevelTreshold(Mat src,Mat &dst)
+{
+	dst = Mat(src.rows, src.cols, CV_8UC1);
+
+	std::vector<float> pdf = computePDF(src);
+
+	std::vector<int> local_maxima = computeLocalMaxima(5, 0.0003, pdf.data());
+
+	for (int i = 0; i < src.rows; i++)
+	{
+		for (int j = 0; j < src.cols; j++)
+		{
+			uchar val = src.at<uchar>(i, j);
+			dst.at<uchar>(i, j) = (uchar)findClosestValue(local_maxima, val);
+		}
+	}
+}
+void showMultiLevelTreshold()
+{
+	char fname[MAX_PATH];
+
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+
+		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+
+		multiLevelTreshold(src, dst);
+
+		imshow("input image", src);
+		imshow("multi level image", dst);
+		std::vector<int> hist;
+		hist=computeHistogram(dst);
+		showHistogram("multi level", hist.data(), 255, 200);
+
+		waitKey();
+	}
+}
+
+
+void showFloydSteinberg()
+{
+	char fname[MAX_PATH];
+
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+
+		//multiLevelTreshold(src, dst);
+		dst = src;
+		std::vector<float> pdf = computePDF(src);
+
+		std::vector<int> local_maxima = computeLocalMaxima(5, 0.0003, pdf.data());
+
+		imshow("input image", src);
+
+		Mat levelTreshold = Mat(src.rows, src.cols, CV_8UC1);
+		multiLevelTreshold(src, levelTreshold);
+		imshow("levelTreshold", levelTreshold);
+
+		for (int i = 0; i < src.rows; i++)
+		{
+			for (int j = 0; j < src.cols; j++)
+			{
+				uchar oldpixel = src.at<uchar>(i, j);
+				uchar newpixel = findClosestValue(local_maxima, oldpixel);
+				dst.at<uchar>(i, j) = newpixel;
+
+				int error = oldpixel - newpixel;
+				//std::cout << error << " ";
+				if (isInside(dst, i, j + 1)) {
+					dst.at<uchar>(i, j + 1) = bound(dst.at<uchar>(i, j + 1) + (7 * error) / 16);
+				}
+
+				if (isInside(dst, i+1, j-1))
+					dst.at<uchar>(i + 1, j-1) = bound(dst.at<uchar>(i + 1, j-1) + (3 * error )/ 16);
+
+				if (isInside(dst, i + 1, j	))
+					dst.at<uchar>(i + 1, j) = bound(dst.at<uchar>(i + 1, j) + (5 * error )/ 16);
+
+				if (isInside(dst, i + 1, j+1))
+					dst.at<uchar>(i + 1, j+1) = bound(dst.at<uchar>(i + 1, j+1) +  error / 16);
+
+			}
+		}
+		for (int i = 0; i < src.rows; i++)
+		{
+			for (int j = 0; j < src.cols; j++)
+			{
+			}
+		}
+
+
+		imshow("dither image", dst);
+		
+
+		waitKey();
+	}
+}
+/*
+lab 3 problem 7
+*/
+void showMultiLevelTresholdHSV()
+{
+	char fname[MAX_PATH];
+
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_COLOR);
+		Mat HSVimage;
+		cvtColor(src, HSVimage, COLOR_BGR2HSV);
+		
+		Mat H = Mat(src.rows, src.cols, CV_8UC1);
+		//extract H
+		for (int i = 0; i < src.rows;i++){
+			for (int j = 0; j < src.cols; j++){
+				Vec3b pixel = HSVimage.at<Vec3b>(i, j);
+				uchar hvalue = pixel[0];
+				H.at<uchar>(i, j) = hvalue;
+			}
+		}
+
+		std::vector<int> hist;
+		hist = computeHistogram(H);
+		showHistogram("h histo", hist.data(), 255, 200);
+
+		Mat HThreshold = Mat(src.rows, src.cols, CV_8UC1);;
+		multiLevelTreshold(H, HThreshold);
+
+		hist = computeHistogram(HThreshold);
+		showHistogram("multi level", hist.data(), 255, 200);
+
+		Mat HSVout = Mat(src.rows, src.cols, CV_8UC3);
+
+		//combine HSV
+		for (int i = 0; i < src.rows; i++) {
+			for (int j = 0; j < src.cols; j++) {
+				Vec3b pixel = HSVimage.at<Vec3b>(i, j);
+				pixel[0] = HThreshold.at<uchar>(i, j);
+				HSVout.at<Vec3b>(i, j) = pixel;
+			}
+		}
+		Mat BGRout= Mat(src.rows, src.cols, CV_8UC3);
+		cvtColor(HSVout, BGRout, COLOR_HSV2BGR);
+
+		imshow("input image", src);
+		imshow("H", H);
+		imshow("H treshold", HThreshold);
+		imshow("HVS out", HSVout);
+		imshow("HVS in", HSVimage);
+		imshow("BGR out", BGRout);
+
+
+
+
+		waitKey();
+	}
+}
+
+int main()
 {
 	int  op;
+	functionSet.push_back(std::make_pair("testBGR2HSV", testBGR2HSV));
 	functionSet.push_back(std::make_pair("lab1Problem3", lab1Problem3));
 	functionSet.push_back(std::make_pair("lab1Problem4", lab1Problem4));
 	functionSet.push_back(std::make_pair("lab1Problem5", lab1Problem5));
@@ -778,6 +1066,11 @@ int newMain()
 	functionSet.push_back(std::make_pair("lab2Problem3", lab2Problem3));
 	functionSet.push_back(std::make_pair("lab2Problem4", lab2Problem4));
 	functionSet.push_back(std::make_pair("testIsInside", testIsInside));
+	functionSet.push_back(std::make_pair("showHistogram", displayHistogram));
+	functionSet.push_back(std::make_pair("show m bin histogram", displayBinHistogram));
+	functionSet.push_back(std::make_pair("showMultiLevelTreshold", showMultiLevelTreshold));
+	functionSet.push_back(std::make_pair("showFloydSteinberg", showFloydSteinberg));
+	functionSet.push_back(std::make_pair("showMultiLevelTresholdHSV", showMultiLevelTresholdHSV));
 
 	do {
 		system("cls");
@@ -801,11 +1094,4 @@ int newMain()
 
 	return 0;
 
-}
-
-
-
-int main()
-{
-	return newMain();
 }
