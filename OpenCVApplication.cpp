@@ -1053,9 +1053,404 @@ void showMultiLevelTresholdHSV()
 	}
 }
 
+/*lab4*/
+
+int area(Mat label_image)
+{
+	int total_area = 0;
+	for (int i = 0; i < label_image.rows; i++)
+	{
+		for (int j = 0; j < label_image.cols; j++)
+		{
+			uchar val = label_image.at<uchar>(i, j);
+			if (val == 1)
+			{
+				total_area++;
+			}
+		}
+	}
+	return total_area;
+}
+
+std::pair<float, float> centerMass(Mat label_image)
+{
+	float center_row = 0.0f;
+	float center_col = 0.0f;
+
+	for (int i = 0; i < label_image.rows; i++)
+	{
+		for (int j = 0; j < label_image.cols; j++)
+		{
+			uchar val = label_image.at<uchar>(i, j);
+			center_row += i * val;
+			center_col += j * val;
+		}
+	}
+	int object_area = area(label_image);
+	center_row = center_row / object_area;
+	center_col = center_col / object_area;
+	return std::make_pair(center_row, center_col);
+}
+
+float elongationAxis(Mat label_image)
+{
+	float numerator = 0.0f;
+	float denominator1 = 0.0f;
+	float denominator2 = 0.0f;
+	std::pair<float, float> center = centerMass(label_image);
+
+	for (int r = 0; r < label_image.rows; r++)
+	{
+		for (int c = 0; c < label_image.cols; c++)
+		{
+			uchar I = label_image.at<uchar>(r, c);
+			numerator += (r - center.first) * (c - center.second) * I;
+			denominator1 += (c - center.second) * (c - center.second) * I;
+			denominator2 += (r - center.first) * (r - center.first) * I;
+
+		}
+	}
+	numerator *= 2;
+	float tan_2phi = numerator/(denominator1 - denominator2);
+	float phi = atan(tan_2phi) / 2;
+	return phi;
+}
+
+bool isOnContour(Mat label_image,int r,int c)
+{
+	int dx[] = { -1,-1,-1,0,0,1,1,1 };
+	int dy[] = { -1,0,1,-1,0,1,-1,0,1 };
+	for (int i = 0; i < 8; i++)
+	{
+		int new_r = r + dx[i];
+		int new_c = c + dy[i];
+		if (isInside(label_image, new_r, new_c))
+		{
+			if (label_image.at<uchar>(new_r, new_c) == 0)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+float perimeter(Mat label_image)
+{
+
+	int perimeter_size = 0;
+	for (int r = 0; r < label_image.rows; r++)
+	{
+		for (int c = 0; c < label_image.cols; c++)
+		{
+			uchar I = label_image.at<uchar>(r, c);
+			if (isOnContour(label_image,r,c) && I == 1)
+			{
+				perimeter_size++;
+			}
+
+		}
+	}
+	return perimeter_size;
+}
+
+float thinnessRatio(Mat label_image)
+{
+	float p= perimeter(label_image);
+	float t = 4 * PI*(area(label_image) / p*p );
+	return t;
+}
+
+float aspectRatio(Mat label_image)
+{
+	int c_max = 0;
+	int r_max = 0;
+	int c_min = label_image.cols;
+	int r_min = label_image.rows;
+
+	for (int r = 0; r < label_image.rows; r++)
+	{
+		for (int c = 0; c < label_image.cols; c++)
+		{
+			uchar I = label_image.at<uchar>(r, c);
+			if (I == 1) {
+				c_max = max(c_max, c);
+				r_max = max(r_max, r);
+				c_min = min(c_min, c);
+				r_min = min(r_min, r);
+			}
+		}
+	}
+	float R = (float)((c_max - c_min + 1) /( r_max - r_min + 1));
+
+	return R;
+}
+
+int projection_h(Mat label_image,int r)
+{
+	int h = 0;
+	for (int c = 0; c < label_image.cols; c++)
+	{
+		uchar I = label_image.at<uchar>(r, c);
+		if (I == 1) {
+			h++;
+		}
+	}
+	return h;
+}
+
+int projection_v(Mat label_image, int c)
+{
+	int v = 0;
+	for (int r = 0; r < label_image.rows; r++)
+	{
+		uchar I = label_image.at<uchar>(r, c);
+		if (I == 1) {
+			v++;
+		}
+	}
+	return v;
+}
+
+
+Mat getLabelImage(Mat image,Vec3b color)
+{
+	Mat label(image.rows, image.cols, CV_8UC1);
+	for (int r = 0; r < image.rows; r++)
+	{
+		for (int c = 0; c < image.cols; c++)
+		{
+			Vec3b col=image.at<Vec3b>(r, c);
+			if (col == color){
+				label.at<uchar>(r, c) = 1;
+			}
+			else {
+				label.at<uchar>(r, c) = 0;
+			}
+		}
+	}
+	return label;
+}
+
+void computeFeaturesAllObjects()
+{
+	char fname[MAX_PATH];
+	std::vector<Mat> label_images;
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname);
+		//Create a window
+		namedWindow("My Window", 1);
+
+
+		// label images based on color
+		//gray
+		label_images.push_back(getLabelImage(src, Vec3b(128, 128, 128)));
+		//red 
+		label_images.push_back(getLabelImage(src, Vec3b(0, 0, 255)));
+		//light blue		
+		label_images.push_back(getLabelImage(src, Vec3b(192, 128, 0)));
+		//purple
+		label_images.push_back(getLabelImage(src, Vec3b(255, 0, 255)));
+		//  blue
+		label_images.push_back(getLabelImage(src, Vec3b(255, 0, 0)));
+		//green
+		label_images.push_back(getLabelImage(src, Vec3b(0, 255, 0)));
+		//brown
+		label_images.push_back(getLabelImage(src, Vec3b(0, 64, 128)));
+
+
+
+		for (int i = 0; i < label_images.size(); i++) {
+			std::cout << "object " << i << " has the following:\n";
+			std::cout << "area " << area(label_images[i]) << "\n";
+			std::cout << "centerMass " << centerMass(label_images[i]).first << " " << centerMass(label_images[i]).second << "\n";
+			std::cout << "elongationAxis " << elongationAxis(label_images[i]) << "\n";
+			std::cout << "perimeter " << perimeter(label_images[i]) << "\n";
+			std::cout << "thinnessRatio " << thinnessRatio(label_images[i]) << "\n";
+			std::cout << "aspectRatio " << aspectRatio(label_images[i]) << "\n";
+		
+		}
+
+		//set the callback function for any mouse event
+		setMouseCallback("My Window", MyCallBackFunc, &src);
+
+
+		//show the image
+		imshow("My Window", src);
+
+		// Wait until user press some key
+
+		waitKey(0);
+	}
+}
+
+
+void drawcontour(Mat &dst, Mat label, Vec3b color)
+{	
+	for (int r = 0; r < dst.rows; r++)
+	{
+		for (int c = 0; c < dst.cols; c++)
+		{
+			if (isOnContour(label, r, c) && label.at<uchar>(r, c) == 1)
+			{
+				dst.at<Vec3b>(r, c) = color;
+			}
+		}
+	}
+}
+
+void MyCallBackFunc2(int event, int x, int y, int flags, void* param)
+{
+	//More examples: http://opencvexamples.blogspot.com/2014/01/detect-mouse-clicks-and-moves-on-image.html
+	Mat* src = (Mat*)param;
+	if (event == EVENT_LBUTTONDOWN)
+	{
+		std::cout << src->rows << " " << src->cols << "\n";
+
+		printf("Pos(x,y): %d,%d  Color(RGB): %d,%d,%d\n",
+			x, y,
+			(int)(*src).at<Vec3b>(y, x)[2],
+			(int)(*src).at<Vec3b>(y, x)[1],
+			(int)(*src).at<Vec3b>(y, x)[0]);
+
+		Vec3b pixel = (*src).at<Vec3b>(y, x);
+
+		Mat label_image = getLabelImage(*src,pixel);
+		std::pair<float, float> center_mass = centerMass(label_image);
+
+		std::cout << "object with color " << pixel << " has the following:\n";
+		std::cout << "area " << area(label_image) << "\n";
+		std::cout << "centerMass " << center_mass.first << " " << center_mass.second << "\n";
+		std::cout << "elongationAxis " << elongationAxis(label_image) << "\n";
+		std::cout << "perimeter " << perimeter(label_image) << "\n";
+		std::cout << "thinnessRatio " << thinnessRatio(label_image) << "\n";
+		std::cout << "aspectRatio " << aspectRatio(label_image) << "\n";
+
+		Mat dst = *src;
+		drawcontour(dst, label_image, Vec3b(0, 0, 0));
+		dst.at<Vec3b>((int)center_mass.first, (int)center_mass.second) =Vec3b(0,0,0);
+		float phi = elongationAxis(label_image);
+		float slope = tan(phi);
+		Point p1(center_mass.first, center_mass.second);
+
+		float y2 = 0;
+		float  x2 = p1.x - (p1.y - y2) / slope;
+		
+		Point p2(x2, y2);
+
+		std::cout << p1 << " " << p2 << "line \n";
+		line(dst, p1, p2, Vec3b(0, 0, 0), 3);
+		
+
+		std::cout << "projection_h : " << projection_h(label_image, x) << "\n";
+		std::cout << "projectoin_v : " << projection_v(label_image, y) << "\n";
+		imshow("object selected", dst);
+
+	}
+}
+
+void computeClickFeaturesObject()
+{
+	char fname[MAX_PATH];
+	std::vector<Mat> label_images;
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname);
+		//Create a window
+		namedWindow("My Window", 1);
+
+		//set the callback function for any mouse event
+		setMouseCallback("My Window", MyCallBackFunc2, &src);
+
+		//show the image
+		imshow("My Window", src);
+		// Wait until user press some key
+
+		waitKey(0);
+	}
+}
+
+void deleteObjects(Mat & image,Vec3b overwriteColor,Mat label)
+{
+	for (int r = 0; r < image.rows; r++)
+	{
+		for (int c = 0; c < image.cols; c++)
+		{
+			uchar I = label.at<uchar>(r, c);
+
+			if (I == 1) {
+				image.at<Vec3b>(r, c)= overwriteColor;
+			}
+		}
+	}
+}
+void selectObjects()
+{
+
+	char fname[MAX_PATH];
+	std::vector<Mat> label_images;
+	while (openFileDlg(fname)) {
+		int TH_area;
+		float phi_LOW, phi_HIGH;
+		std::cout << "TH_area:";
+		std::cin >> TH_area;
+		std::cout << " phi_LOW:";
+		std::cin >> phi_LOW;
+		std::cout << " phi_HIGH:";
+		std::cin >> phi_HIGH;
+
+		Mat src = imread(fname);
+		//Create a window
+		namedWindow("My Window", 1);
+
+
+		// label images based on color
+		//gray
+		label_images.push_back(getLabelImage(src, Vec3b(128, 128, 128)));
+		//red 
+		label_images.push_back(getLabelImage(src, Vec3b(0, 0, 255)));
+		//light blue		
+		label_images.push_back(getLabelImage(src, Vec3b(192, 128, 0)));
+		//purple
+		label_images.push_back(getLabelImage(src, Vec3b(255, 0, 255)));
+		//  blue
+		label_images.push_back(getLabelImage(src, Vec3b(255, 0, 0)));
+		//green
+		label_images.push_back(getLabelImage(src, Vec3b(0, 255, 0)));
+		//brown
+		label_images.push_back(getLabelImage(src, Vec3b(0, 64, 128)));
+
+
+
+		for (int i = 0; i < label_images.size(); i++) {
+			std::cout << "object " << i << " has the following:\n";
+			std::cout << "area " << area(label_images[i]) << "\n";
+			std::cout << "elongationAxis " << elongationAxis(label_images[i]) << "\n";
+			if (!(area(label_images[i]) < TH_area && elongationAxis(label_images[i]) >= phi_LOW && elongationAxis(label_images[i]) <= phi_HIGH) )
+			{
+				std::cout << "object " << i << "deleted\n";
+				deleteObjects(src, Vec3b(255, 255, 255), label_images[i]);
+			}
+		}
+
+		//set the callback function for any mouse event
+		setMouseCallback("My Window", MyCallBackFunc, &src);
+
+
+		//show the image
+		imshow("My Window", src);
+
+		// Wait until user press some key
+
+		waitKey(0);
+	}
+}
 int main()
 {
 	int  op;
+	functionSet.push_back(std::make_pair("testMouseClick", testMouseClick));
+
 	functionSet.push_back(std::make_pair("testBGR2HSV", testBGR2HSV));
 	functionSet.push_back(std::make_pair("lab1Problem3", lab1Problem3));
 	functionSet.push_back(std::make_pair("lab1Problem4", lab1Problem4));
@@ -1071,6 +1466,10 @@ int main()
 	functionSet.push_back(std::make_pair("showMultiLevelTreshold", showMultiLevelTreshold));
 	functionSet.push_back(std::make_pair("showFloydSteinberg", showFloydSteinberg));
 	functionSet.push_back(std::make_pair("showMultiLevelTresholdHSV", showMultiLevelTresholdHSV));
+	functionSet.push_back(std::make_pair("computeFeaturesAllObjects", computeFeaturesAllObjects));
+	functionSet.push_back(std::make_pair("computeClickFeaturesObject", computeClickFeaturesObject));
+	functionSet.push_back(std::make_pair("selectObjects", selectObjects));
+
 
 	do {
 		system("cls");
