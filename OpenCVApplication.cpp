@@ -1343,8 +1343,8 @@ void MyCallBackFunc2(int event, int x, int y, int flags, void* param)
 		line(dst, p1, p2, Vec3b(0, 0, 0), 3);
 		
 
-		std::cout << "projection_h : " << projection_h(label_image, x) << "\n";
-		std::cout << "projectoin_v : " << projection_v(label_image, y) << "\n";
+		std::cout << "projection_h : " << projection_h(label_image, y) << "\n";
+		std::cout << "projectoin_v : " << projection_v(label_image, x) << "\n";
 		imshow("object selected", dst);
 
 	}
@@ -1421,8 +1421,6 @@ void selectObjects()
 		//brown
 		label_images.push_back(getLabelImage(src, Vec3b(0, 64, 128)));
 
-
-
 		for (int i = 0; i < label_images.size(); i++) {
 			std::cout << "object " << i << " has the following:\n";
 			std::cout << "area " << area(label_images[i]) << "\n";
@@ -1450,7 +1448,6 @@ int main()
 {
 	int  op;
 	functionSet.push_back(std::make_pair("testMouseClick", testMouseClick));
-
 	functionSet.push_back(std::make_pair("testBGR2HSV", testBGR2HSV));
 	functionSet.push_back(std::make_pair("lab1Problem3", lab1Problem3));
 	functionSet.push_back(std::make_pair("lab1Problem4", lab1Problem4));
