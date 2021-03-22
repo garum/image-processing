@@ -1387,7 +1387,6 @@ void deleteObjects(Mat & image,Vec3b overwriteColor,Mat label)
 }
 void selectObjects()
 {
-
 	char fname[MAX_PATH];
 	std::vector<Mat> label_images;
 	while (openFileDlg(fname)) {
@@ -1403,8 +1402,6 @@ void selectObjects()
 		Mat src = imread(fname);
 		//Create a window
 		namedWindow("My Window", 1);
-
-
 		// label images based on color
 		//gray
 		label_images.push_back(getLabelImage(src, Vec3b(128, 128, 128)));
@@ -1444,6 +1441,218 @@ void selectObjects()
 		waitKey(0);
 	}
 }
+
+
+std::vector<Point2i> getNeighbors4(Point2i pos, Mat image) {
+	int dx[] = { -1,0,0,1 };
+	int dy[] = { 0,-1,1,0};
+	std::vector<Point2i> result;
+	for (int i = 0; i < 8; i++)
+	{
+		int new_x = pos.x + dx[i];
+		int new_y = pos.y + dy[i];
+		if (isInside(image, new_x, new_y))
+		{
+			result.push_back(Point2i(new_x, new_y));
+		}
+	}
+	return result;
+}
+
+
+std::vector<Point2i> getNeighbors8(Point2i pos, Mat image) {
+	int dx[] = { -1,-1,-1,0,0,1,1,1 };
+	int dy[] = { -1,0,1,-1,0,1,-1,0,1 };
+	std::vector<Point2i> result;
+	for (int i = 0; i < 8; i++)
+	{
+		int new_x = pos.x + dx[i];
+		int new_y = pos.y + dy[i];
+		if (isInside(image, new_x, new_y))
+		{
+			result.push_back(Point2i(new_x, new_y));
+		}
+	}
+	return result;
+}
+
+Mat_<int> traversal(Mat image, std::function<std::vector<Point2i> (Point2i,Mat)> getNeighbors)
+{
+	int label = 0;
+	Mat_ <int> labels(image.rows,image.cols);
+	//std::cout << image.rows << " "
+	labels.setTo(0);
+	for (int i = 0; i < image.rows; i++)
+	{
+		for (int j = 0; j < image.cols; j++)
+		{
+			//std::cout << i << " " << j << "\n";
+			if (image.at<uchar>(i, j) == 0 && labels[i][j] == 0)
+			{
+				label++;
+				std::queue<Point2i> q;
+				q.push((Point2i(i, j)));
+				while (!q.empty()) {
+					Point2i pixel = q.front();
+					//std::cout << pixel;
+					q.pop();
+					for (auto neighbor : getNeighbors(pixel, image)) {
+						if (image.at<uchar>(neighbor.x, neighbor.y) == 0 && labels[neighbor.x][neighbor.y] == 0) {
+							q.push(neighbor);
+							labels[neighbor.x][neighbor.y] = label;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return labels;
+}
+
+Mat_<int> twoPassLabeling(Mat image, std::function<std::vector<Point2i>(Point2i, Mat)> getNeighbors) {
+	int label = 0;
+	Mat_ <int> labels(image.rows, image.cols);
+	labels.setTo(0);
+	std::vector<std::vector<int> > edges;
+
+	edges.push_back(std::vector<int>());
+
+	for (int i = 0; i < image.rows; i++) {
+		for (int j = 0; j < image.cols; j++)
+		{
+			if (image.at<uchar>(i, j) == 0 && labels[i][j] == 0)
+			{
+				std::vector<int> L;
+				for (auto neighbor : getNeighbors(Point2i(i, j), image)) {
+					if (labels[neighbor.x][neighbor.y] > 0) {
+						L.push_back(labels[neighbor.x][neighbor.y]);
+					}
+				}
+
+				if (L.size() == 0) {
+					label++;
+					labels[i][j] = label;
+					edges.push_back(std::vector<int>());
+				}
+				else
+				{
+					int x = *std::min_element(L.begin(), L.end());
+					labels[i][j] = x;
+					for (auto it : L)
+					{
+						if (it != x) {
+							edges[x].push_back(it);
+							edges[it].push_back(x);
+						}
+					}
+				}
+
+
+			}
+		}
+	}
+
+	int newLabel = 0;
+	std::vector<int> newLabels;
+	for (int i = 0; i < label + 1; i++) {
+		newLabels.push_back(0);
+	}
+
+	for (int i = 1; i <= label; i++) {
+		if (newLabels[i] == 0) {
+			newLabel++;
+			std::queue<int>  q;
+			q.push(i);
+			while (!q.empty()) {
+				int x = q.front();
+				q.pop();
+				for (auto y : edges[x])
+				{
+					if (newLabels[y] == 0) {
+						newLabels[y] = newLabel;
+						q.push(y);
+					}
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < image.rows; i++)
+	{
+		for (int j = 0; j < image.cols; j++) {
+			labels[i][j] = newLabels[labels[i][j]];
+		}
+	}
+	return labels;
+}
+
+Mat setColorsToLables( Mat_<int> labels)
+{
+	Mat image(labels.rows, labels.cols, CV_8UC3);
+	int maximumLabel=0;
+	for (int i = 0; i < labels.rows; i++)
+	{
+		for (int j = 0; j < labels.cols; j++) {
+			maximumLabel = max(maximumLabel, labels[i][j]);
+		}
+	}
+	std::vector<Vec3b> colors;
+	colors.push_back(Vec3b(255, 255, 255));
+	for(int i=1;i<=maximumLabel;i++)
+		colors.push_back(Vec3b(rand()%255, rand() % 255,rand()%255));
+
+	for (int i = 0; i < labels.rows; i++)
+	{
+		for (int j = 0; j < labels.cols; j++) {
+			image.at<Vec3b>(i, j) = colors[labels[i][j]];
+		}
+	}
+	return image;
+
+}
+
+void showTraversal()
+{
+	char fname[MAX_PATH];
+
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+
+		Mat dst = Mat(src.rows, src.cols, CV_8UC3);
+
+		Mat_<int> labels  = traversal(src, getNeighbors8);
+		dst = setColorsToLables(labels);
+		imshow("input image", src);
+		imshow("out image", dst);
+		std::vector<int> hist;
+		
+
+		waitKey();
+	}
+}
+
+void showTwoPassLabeling()
+{
+	char fname[MAX_PATH];
+
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+
+		Mat dst = Mat(src.rows, src.cols, CV_8UC3);
+
+		Mat_<int> labels = twoPassLabeling(src, getNeighbors8);
+		dst = setColorsToLables(labels);
+		imshow("input image", src);
+		imshow("out image", dst);
+		std::vector<int> hist;
+
+
+		waitKey();
+	}
+}
 int main()
 {
 	int  op;
@@ -1466,8 +1675,12 @@ int main()
 	functionSet.push_back(std::make_pair("computeFeaturesAllObjects", computeFeaturesAllObjects));
 	functionSet.push_back(std::make_pair("computeClickFeaturesObject", computeClickFeaturesObject));
 	functionSet.push_back(std::make_pair("selectObjects", selectObjects));
+	functionSet.push_back(std::make_pair("showTraversal", showTraversal));
+	functionSet.push_back(std::make_pair("showTwoPassLabeling", showTwoPassLabeling));
 
 
+
+	
 	do {
 		system("cls");
 		destroyAllWindows();
