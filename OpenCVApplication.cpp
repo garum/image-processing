@@ -8,6 +8,8 @@
 #include <vector>
 #include <utility>
 #include <functional>
+#include <fstream>
+
 
 std::vector<std::pair<std::string, std::function <void() > > > functionSet;
 
@@ -1647,12 +1649,170 @@ void showTwoPassLabeling()
 		dst = setColorsToLables(labels);
 		imshow("input image", src);
 		imshow("out image", dst);
-		std::vector<int> hist;
 
 
 		waitKey();
 	}
 }
+
+void borderTracing(Mat image,Point2i startPoint,Mat &dst,std::vector <int> &chain_code){
+
+	Point2i directions[] = { Point2i(0,1),
+							Point2i(-1,1),
+							Point2i(-1,0),
+							Point2i(-1,-1),
+							Point2i(0,-1),
+							Point2i(1,-1),
+							Point2i(1,0),
+							Point2i(1,1) };
+	int dir = 7;
+	std::cout << directions[0].x << " " << directions[0].y << "\n";
+
+	Point2i currentPoint = startPoint;
+	std::vector<Point2i> points;
+	std::vector<int> path;
+	//find p1
+	Point2i nextPoint;
+	if (dir % 2 == 0)
+	{
+		dir = (dir + 7) % 8;
+	}
+	else {
+		dir = (dir + 6) % 8;
+	}
+	// search the next point in 3X3
+	for (int i = 0; i < 8; i++)
+	{
+		nextPoint = currentPoint + directions[dir];
+		if (image.at<uchar>(nextPoint.x, nextPoint.y) == 0)
+			break;
+		dir = (dir + 1) % 8;
+	}
+	points.push_back(startPoint);
+	points.push_back(nextPoint);
+	std::cout << points[0] << " " << points[1] << "\n";
+	bool firstPass = true;
+	while((points[0]!= points[points.size()-2] && points[1]!= points[points.size()-1]) || firstPass){
+		currentPoint = points.back();
+		//find the start_direction 
+		if (dir % 2 == 0)
+		{
+			dir = (dir + 7) % 8;
+		}
+		else {
+			dir = (dir + 6) % 8;
+		}
+		// search the next point in 3X3
+		for (int i = 0; i < 8; i++)
+		{
+			nextPoint = currentPoint + directions[dir];
+			if (image.at<uchar>(nextPoint.x, nextPoint.y) == 0)
+				break;
+
+			dir = (dir + 1) % 8;
+		}
+
+		std::cout << nextPoint << " " << dir << "\n";
+		path.push_back(dir);
+		points.push_back(nextPoint);
+		firstPass = false;
+	}
+
+	std::cout << "start to draw";
+
+	for (auto it : points)
+	{
+		dst.at<uchar>(it.x, it.y) = 0;
+	}
+	path.pop_back();
+	chain_code = path;
+}
+
+void showBorderTracing() {
+	char fname[MAX_PATH];
+
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+
+		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+		for (int i = 0; i < src.rows; i++)
+		{
+			for (int j = 0; j < src.cols; j++) {
+				dst.at<uchar>(i,j) = 255;
+			}
+		}
+		bool found = false;
+		std::vector<int> chain_code;
+		for (int i = 0; i < src.rows && !found; i++)
+		{
+			for (int j = 0; j < src.cols && !found; j++) {
+				if (src.at<uchar>(i, j) == 0) {
+					std::cout << i << " " << j << "\n";
+					borderTracing(src, Point2i(i, j), dst, chain_code);
+					found = true;
+				}
+			}
+		}
+		//dst = setColorsToLables(labels);
+		imshow("input image", src);
+		imshow("out image", dst);
+		std::cout << "size of codes:" << chain_code.size() << "\n";
+		for (auto it : chain_code) {
+			std::cout << it << " ";
+		}
+		std::vector<int> derivative;
+
+		std::cout << "\nderivative \n";
+		for (int i = 0; i < chain_code.size()-1; i++) {
+			if (chain_code[i + 1] - chain_code[i] > 0)
+				derivative.push_back(chain_code[i + 1] - chain_code[i]);
+			else
+				derivative.push_back(8 + (chain_code[i + 1] - chain_code[i]));
+			std::cout << derivative.back() << " ";
+		}
+		waitKey();
+	}
+}
+
+void showReconstruct() {
+	Point2i directions[] = { Point2i(0,1),
+						Point2i(-1,1),
+						Point2i(-1,0),
+						Point2i(-1,-1),
+						Point2i(0,-1),
+						Point2i(1,-1),
+						Point2i(1,0),
+						Point2i(1,1) };
+
+	std::ifstream fin("Images/reconstruct.txt");
+	int startx, starty;
+	fin >> startx >> starty;
+	Mat dst = Mat(1000, 1000, CV_8UC1);
+	for (int i = 0; i < dst.rows; i++)
+	{
+		for (int j = 0; j < dst.cols; j++) {
+			dst.at<uchar>(i, j) = 255;
+		}
+	}
+	int size;
+	fin >> size;
+	dst.at<uchar>(startx, starty) = 0;
+	Point2i postion(startx, starty);
+	for (int i = 0; i < size; i++)
+	{
+		int dir;
+		fin >> dir;
+		postion += directions[dir];
+		dst.at<uchar>(postion.x, postion.y) = 0;
+
+	}
+	imshow("out image", dst);
+
+	waitKey();
+
+}
+
 int main()
 {
 	int  op;
@@ -1677,6 +1837,8 @@ int main()
 	functionSet.push_back(std::make_pair("selectObjects", selectObjects));
 	functionSet.push_back(std::make_pair("showTraversal", showTraversal));
 	functionSet.push_back(std::make_pair("showTwoPassLabeling", showTwoPassLabeling));
+	functionSet.push_back(std::make_pair("showBorderTracing", showBorderTracing));
+	functionSet.push_back(std::make_pair("showReconstruct", showReconstruct));
 
 
 
