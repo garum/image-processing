@@ -2353,7 +2353,7 @@ void lab8Problem4()
 		waitKey();
 	}
 }
-void applyFilter(int H[3][3], Mat src, Mat& dst, int sizeH = 3) {
+void applyFilter(float H[7][7], Mat src, Mat& dst, int sizeH = 7) {
 	int start = (sizeH - 1) / 2;
 
 	for (int i = start; i < src.rows - start; i++) {
@@ -2396,17 +2396,18 @@ void applyFilter(int H[3][3], Mat src, Mat& dst, int sizeH = 3) {
 
 }
 
+
 void lab9Problem1() {
 	char fname[MAX_PATH];
 	while (openFileDlg(fname)) {
 		Mat src = imread(fname, IMREAD_GRAYSCALE);
 		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
-		int H[3][3] = {
+		float H[7][7] = {
 			-1, -1, -1, 
 			-1, 8, -1, 
 			-1, -1, -1, 
 		};
-		applyFilter(H, src, dst);
+		applyFilter(H, src, dst,3);
 		imshow("input image", src);
 		imshow("out", dst);
 		waitKey();
@@ -2422,17 +2423,17 @@ void lab9Problem2()
 		Mat dst2 = Mat(src.rows, src.cols, CV_8UC1);
 		Mat dst3 = Mat(src.rows, src.cols, CV_8UC1);
 
-		int H[3][3] = {
+		float H[7][7] = {
 			1, 1, 1,
 			1, 1,1,
 			1, 1, 1,
 		};
-		int H2[3][3] = {
+		float H2[7][7] = {
 		0, 0, 0,
 		-1, 3, -1,
 		0, -1, 0,
 		};
-		int H3[3][3] = {
+		float H3[7][7] = {
 		-1, -1, -1,
 		-1, 9, -1,
 		-1, -1, -1,
@@ -2446,6 +2447,111 @@ void lab9Problem2()
 		imshow("dst2", dst2);
 		imshow("dst3", dst3);
 
+		waitKey();
+	}
+}
+
+void medianMaxMinFilter(Mat src,Mat &dst,int w,int choice)
+{
+	int start = (w - 1) / 2;
+	std::vector<uchar> allValues;
+
+	std::cout << "start median filter\n";
+	std::cout << src.rows << " " << src.cols << "\n";
+	for (int i = start; i < src.rows - start; i++) {
+		for (int j = start; j < src.cols - start; j++) {
+			uchar pixel = src.at<uchar>(i, j);
+			allValues.clear();
+			
+			for (int u = 0; u < w; u++) {
+				for (int v = 0; v < w; v++) {
+					allValues.push_back(src.at<uchar>(i + u - start, j + v - start));
+				}
+			}
+			sort(allValues.begin(), allValues.end());
+			if (choice == 1) {
+				dst.at<uchar>(i, j) = allValues[allValues.size() / 2];
+			}
+			else if(choice == 2)
+			{
+				dst.at<uchar>(i, j) = allValues.front();
+			}
+			else
+			{
+				dst.at<uchar>(i, j) = allValues.back();
+			}
+			//std::cout << dst.at<uchar>(i, j) << " ";
+		}
+	}
+
+	std::cout << "done with median filter";
+}
+
+float gaussianCell(float x, float y, float x0, float y0,float deviations)
+{
+	const float euler = exp(1);
+	float expValue = (-(x - x0) * (x - x0) + (y - y0) * (y - y0))/(2* deviations* deviations);
+	return pow(euler, expValue) / (2 * PI * deviations * deviations);
+}
+
+void lab10Problem1()
+{
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+		int w;
+		std::cout << "w= \n";
+		std::cin >> w;
+		int choice = 0;
+
+		std::cout << "1 - median \n 2 - min \n 3- max\n";
+		std::cin >> choice;
+		double t = (double)getTickCount();
+		medianMaxMinFilter( src, dst,w, choice);
+		t = ((double)getTickCount() - t) / getTickFrequency();
+		// Display (in the console window) the processing time in [ms]
+		printf("Time = %.3f [ms]\n", t * 1000);
+
+		imshow("input image", src);
+		imshow("dst ", dst);
+
+
+
+		waitKey();
+	}
+}
+void lab10Problem2()
+{
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+		float H[7][7];
+		int w;
+		std::cout << "w= ";
+		std::cin >> w;
+
+		double t = (double)getTickCount(); // Get the current time [ms]
+	// … Actual processing …
+	// Get the current time again and compute the time difference [ms]
+	
+		for (int i = 0; i < w; i++)
+		{
+			for (int j = 0; j < w; j++)
+			{
+				H[i][j] = gaussianCell(i, j, (int)(w / 2), (int)(w / 2), (float)w / 6.0);
+				std::cout << H[i][j] << " ";
+			}
+			std::cout << "\n";
+		}
+		applyFilter(H,src, dst, w);
+		imshow("input image", src);
+		imshow("dst", dst);
+
+		t = ((double)getTickCount() - t) / getTickFrequency();
+		// Display (in the console window) the processing time in [ms]
+		printf("Time = %.3f [ms]\n", t * 1000);
 		waitKey();
 	}
 }
@@ -2484,10 +2590,8 @@ int main()
 	functionSet.push_back(std::make_pair("lab8Problem4", lab8Problem4));
 	functionSet.push_back(std::make_pair("lab9Problem1", lab9Problem1));
 	functionSet.push_back(std::make_pair("lab9Problem2", lab9Problem2));
-
-
-
-
+	functionSet.push_back(std::make_pair("lab10Problem1", lab10Problem1));
+	functionSet.push_back(std::make_pair("lab10Problem2", lab10Problem2));
 
 	
 	do {
