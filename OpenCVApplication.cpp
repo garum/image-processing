@@ -816,7 +816,6 @@ void displayHistogram()
 		Mat src = imread(fname, IMREAD_GRAYSCALE);
 		
 		std::vector<int> histogram;
-
 		histogram=computeHistogram(src);
 		showHistogram("pixel intensity", histogram.data(), histogram.size(), 200);
 		imshow("input image", src);
@@ -1813,6 +1812,644 @@ void showReconstruct() {
 
 }
 
+
+void dilationStudents(Mat src, Mat& dst)
+{
+	dst = Mat(src.rows, src.cols, CV_8UC1);
+
+	int nh[][2] = {
+		{0, 1},
+		{0, -1},
+		{1, 0},
+		{-1, 0},
+		{1, 1},
+		{-1, -1},
+		{1, -1},
+		{-1, 1}
+	};
+
+	int h = src.rows;
+	int w = src.cols;
+
+	dst.setTo(255);
+	for (int i = 1; i < h - 1; i++) {
+		for (int j = 1; j < w - 1; j++) {
+			if (src.at<uchar>(i, j) == 0) {
+		
+
+				for (int k = 0; k < 8; k++)
+				{
+
+					int newi = i + nh[k][0];
+					int newj = j + nh[k][1];
+
+					dst.at<uchar>(newi, newj) = 0;
+
+				}
+				dst.at<uchar>(i, j) = 0;
+			}
+		}
+	}
+
+}
+
+
+
+
+
+void erosionStudents(Mat src, Mat& dst)
+{
+	dst = Mat(src.rows, src.cols, CV_8UC1);
+
+	int nh[][2] = {
+		{0, 1},
+		{0, -1},
+		{1, 0},
+		{-1, 0},
+		{1, 1},
+		{-1, -1},
+		{1, -1},
+		{-1, 1}
+	};
+
+	int h = src.rows;
+	int w = src.cols;
+
+	dst.setTo(255);
+
+	for (int i = 1; i < h - 1; i++) {
+		for (int j = 1; j < w - 1; j++) {
+			bool object = true;
+			if (src.at<uchar>(i, j) == 0) {
+				for (int k = 0; k < 8; k++)
+				{
+					int newi = i + nh[k][0];
+					int newj = j + nh[k][1];
+
+					if (src.at<uchar>(newi, newj) == 255) {
+						object = false;
+						break;
+					}
+
+
+				}
+				dst.at<uchar>(i, j) = 0;
+				if (!object)
+					dst.at<uchar>(i, j) = 255;
+			}
+		}
+	}
+}
+
+void openingStudents(Mat src, Mat& dst2)
+{
+	Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+	dst2 = Mat(src.rows, src.cols, CV_8UC1);
+
+	erosionStudents(src, dst);
+	dilationStudents(dst, dst2);
+}
+
+void closingStudents(Mat src, Mat& dst) {
+	Mat dst_aux = Mat(src.rows, src.cols, CV_8UC1);
+	dst = Mat(src.rows, src.cols, CV_8UC1);
+
+	dilationStudents(src, dst_aux);
+	erosionStudents(dst_aux, dst);
+
+}
+
+
+void applyRepeated(void (*operation) (Mat src, Mat& dst), int times, const Mat& src, Mat& dst) {
+	Mat curr_src = src.clone();
+	Mat curr_dst = src.clone();
+
+	for (int i = 0; i < times; i++) {
+		operation(curr_src, curr_dst);
+		curr_src = curr_dst;
+	}
+
+	dst = curr_dst;
+}
+
+void boundaryStudents(Mat src, Mat& dst) {
+	Mat erodedImage = Mat(src.rows, src.cols, CV_8UC1);
+	dst = Mat(src.rows, src.cols, CV_8UC1);
+
+	erosionStudents(src, erodedImage);
+
+	for (int i = 0; i < src.rows; i++)
+		for (int j = 0; j < src.cols; j++)
+		{
+			dst.at<uchar>(i, j) = abs(src.at<uchar>(i, j) - erodedImage.at<uchar>(i, j));
+		}
+
+	//Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+	//dst = src.clone()
+}
+
+void complementaryImage(Mat src, Mat &dst)
+{
+	dst = Mat(src.rows, src.cols, CV_8UC1);
+	for (int i = 0; i < src.rows; i++)
+		for (int j = 0; j < src.cols; j++)
+		{
+			if (src.at<uchar>(i, j) == 0)
+				dst.at<uchar>(i, j) = 255;
+			else 
+				dst.at<uchar>(i, j) = 0;
+
+		}
+}
+
+bool compareMat(Mat src, Mat dst)
+{
+	//dst = Mat(src.rows, src.cols, CV_8UC1);
+	for (int i = 0; i < src.rows; i++)
+		for (int j = 0; j < src.cols; j++)
+		{
+			if (src.at<uchar>(i, j) != dst.at<uchar>(i, j))
+				return false;
+		}
+
+	return true;
+}
+
+void regionFilling(Point2i start,Mat A, Mat& dst)
+{
+
+	imshow("initia21l", A);
+
+	dst = Mat(A.rows, A.cols, CV_8UC1);
+	
+	Mat x = Mat(A.rows, A.cols, CV_8UC1);
+	Mat last_x = Mat(A.rows, A.cols, CV_8UC1);
+	for (int i = 0; i < A.rows; i++)
+		for (int j = 0; j < A.cols; j++)
+		{
+			x.at<uchar>(i, j) = 255;
+		}
+
+	last_x = x.clone();
+	x.at<uchar>(start.x, start.y) = 0;
+	int k=0;
+
+	while (!compareMat(last_x,x ))
+	{
+		
+		k++;
+		std::cout << " " << k << "\n";
+		last_x = x.clone();
+
+		Mat dilation;
+		dilationStudents(last_x, dilation);
+	
+		//intersection;
+		for (int i = 0; i < A.rows; i++)
+			for (int j = 0; j < A.cols; j++)
+			{
+				if(dilation.at<uchar>(i, j) == 0 && A.at<uchar>(i, j) == 0)
+					x.at<uchar>(i, j) = 0;
+				else 
+					x.at<uchar>(i, j) = 255;
+			}
+
+
+	}
+	dst = x;
+}
+
+
+
+void testBoundaryExtractionStudents()
+{
+	char fname[MAX_PATH];
+	if (openFileDlg(fname))
+	{
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		Mat dst;
+		boundaryStudents(src, dst);
+		imshow("initial", src);
+		imshow("boundary image", dst);
+		waitKey(0);
+	}
+}
+
+void testRegionFilling()
+{
+	char fname[MAX_PATH];
+	if (openFileDlg(fname))
+	{
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		Mat dst;
+		Mat border;
+		boundaryStudents(src, border);
+
+		regionFilling(Point(110, 110), border, dst);
+	
+		imshow("initial", src);
+		imshow("region filling image", dst);
+		waitKey(0);
+	}
+}
+
+float computeMean(Mat src) {
+
+	float total_sum = 0;
+	for (int i = 0; i < src.rows; i++) {
+		for (int j = 0; j < src.cols; j++) {
+			total_sum += (float)src.at<uchar>(i, j);
+		}
+	}
+	return( total_sum / (float)(src.rows * src.cols));
+}
+
+float computeStandard(Mat src) {
+	float ans;
+	float mean = computeMean(src);
+	float total_sum = 0;
+	for (int i = 0; i < src.rows; i++) {
+		for (int j = 0; j < src.cols; j++) {
+			total_sum += ((float)src.at<uchar>(i, j)-mean)* ((float)src.at<uchar>(i, j) - mean);
+		}
+	}
+	ans= total_sum /(float) (src.rows * src.cols);
+	return sqrt(ans);
+
+}
+
+void histogramCumulative(Mat src)
+{
+	std::vector<int> histogram;
+	histogram = computeHistogram(src);
+	std::vector<int> histogramCumulative;
+	histogramCumulative.push_back(histogram[0]);
+	for (int i = 1; i < histogram.size(); i++)
+	{
+		int val = histogramCumulative.back() + histogram[i];
+		histogramCumulative.push_back(val);
+	}
+	showHistogram("histogramCumulative", histogramCumulative.data(), histogramCumulative.size(), 200);
+}
+void lab8Problem1()
+{
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_COLOR);
+		std::cout << "mean " << computeMean(src) << "\n";
+		std::cout << "Standard " << computeStandard(src) << "\n";
+
+		imshow("Source img", src);
+		histogramCumulative(src);
+		waitKey();
+	}
+}
+void computeMeanBasedOnThreshold(Mat src, float T, float &mean1, float &mean2)
+{
+	float total_sum1 = 0, total_sum2 = 0;
+	float n1 = 0, n2 = 0;
+	for (int i = 0; i < src.rows; i++) {
+		for (int j = 0; j < src.cols; j++) {
+			if ((float)src.at<uchar>(i, j) <= T) {
+				total_sum1 += (float)src.at<uchar>(i, j);
+				n1++;
+			}
+			else
+			{
+				total_sum2 += (float)src.at<uchar>(i, j);
+				n2++;
+			}
+		}
+	}
+	mean1=(total_sum1 / n1);
+	mean2 = (total_sum2 / n2);
+}
+void globalThresholding(Mat src,float err,Mat &dst)
+{
+	int Imax = 0, Imin = 300;
+	std::vector<int> histogram;
+	histogram = computeHistogram(src);
+	for (int i = 0; i < histogram.size(); i++)
+	{
+		if (histogram[i] != 0)
+		{
+			Imax = max(Imax, i);
+			Imin = min(Imin, i);
+		}
+	}
+
+	float threshold = 0;
+	float threshold2 = ((float)(Imax + Imin)) / 2.0;
+	float mean1, mean2;
+	while (fabs(threshold2 - threshold) < err) {
+
+		threshold = threshold2;
+		computeMeanBasedOnThreshold(src, threshold2, mean1, mean2);
+		threshold2 = (mean1 + mean2) / 2.0;
+	}
+	std::cout << threshold2 << "\n";
+	for (int i = 0; i < src.rows; i++) {
+		for (int j = 0; j < src.cols; j++) {
+
+			if ((float)src.at<uchar>(i, j) <= threshold2) {
+				dst.at<uchar>(i, j) = 0;
+			}else
+			{
+				dst.at<uchar>(i, j) = 255;
+			}
+		}
+	}
+
+
+}
+
+void lab8Problem2()
+{
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		int height = src.rows;
+		int width = src.cols;
+		imshow("Source img", src);
+		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+		globalThresholding(src, 0.1, dst);
+		imshow("dst", dst);
+
+		waitKey();
+	}
+}
+void histogramStretchingShrinking(Mat src, int gOutMin, int gOutMax) {
+	Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+
+	int gIn, gInMin = 256, gInMax = 0;
+
+	for (int i = 0; i < src.rows; i++) {
+		for (int j = 0; j < src.cols; j++) {
+			uchar val = src.at<uchar>(i, j);
+			if (val > gInMax) {
+				gInMax = val;
+			}
+			else if (val < gInMin) {
+				gInMin = val;
+			}
+		}
+	}
+
+	for (int i = 0; i < src.rows; i++) {
+		for (int j = 0; j < src.cols; j++) {
+			uchar aux = gOutMin + ((src.at<uchar>(i, j) - gInMin) * (gOutMax - gOutMin) / (gInMax - gInMin));
+			if (aux <= 0) {
+				dst.at<uchar>(i, j) = 0;
+			}
+			else if (aux >= 255) {
+				dst.at<uchar>(i, j) = 255;
+			}
+			else {
+				dst.at<uchar>(i, j) = aux;
+			}
+		}
+	}
+
+	imshow("StretchingShrinking", dst);
+	std::vector<int> histogram;
+	histogram = computeHistogram(dst);
+	showHistogram("histogramStretchingShrinking", histogram.data(), histogram.size(), 200);
+}
+
+
+
+void histogramGamma(Mat src, float gamma) {
+	Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+
+	for (int i = 0; i < src.rows; i++) {
+		for (int j = 0; j < src.cols; j++) {
+			float aux = 255 * pow(((float)src.at<uchar>(i, j) / 255.0), gamma);
+			if (aux <= 0) {
+				dst.at<uchar>(i, j) = 0;
+			}
+			else if (aux >= 255) {
+				dst.at<uchar>(i, j) = 255;
+			}
+			else {
+				dst.at<uchar>(i, j) = floor(aux);
+			}
+		}
+	}
+
+	imshow("Gamma", dst);
+	std::vector<int> histogram;
+	histogram = computeHistogram(dst);
+	showHistogram("histogramGamma", histogram.data(), histogram.size(), 200);
+}
+
+void histogramSlide(Mat src, int offset) {
+	Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+
+	for (int i = 0; i < src.rows; i++) {
+		for (int j = 0; j < src.cols; j++) {
+
+			int val = src.at<uchar>(i, j) + offset;
+			if (val <= 0) {
+				dst.at<uchar>(i, j) = 0;
+			}
+			else if (val >= 255) {
+				dst.at<uchar>(i, j) = 255;
+			}
+			else {
+				dst.at<uchar>(i, j) = val;
+			}
+		}
+	}
+
+	imshow("Brightness", dst);
+	std::vector<int> histogram;
+	histogram = computeHistogram(dst);
+	showHistogram("histogramSlide", histogram.data(), histogram.size(), 200);
+}
+void lab8Problem3() {
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		int height = src.rows;
+		int width = src.cols;
+		float gamma;
+		int gOutMin, gOutMax, offset;
+		std::cout << "gOutMin  ";
+		std::cin >> gOutMin;
+		std::cout << "gOutMax  ";
+		std::cin >> gOutMax;
+		std::cout << "gamma ";
+		std::cin >> gamma;
+		std::cout << "offset  ";
+		std::cin >> offset;
+		Mat dst = Mat(height, width, CV_8UC1);
+		imshow("Source img", src);
+
+		histogramStretchingShrinking(src, gOutMin, gOutMax);
+
+		histogramGamma(src, gamma);
+
+		histogramSlide(src, offset);
+		std::vector<int> histogram;
+		histogram = computeHistogram(src);
+		showHistogram("src histogram", histogram.data(), histogram.size(), 200);
+		waitKey();
+	}
+}
+
+
+void histogramEqualization(Mat src,Mat &dst)
+{
+	std::vector<float>pdf = computePDF(src);
+	std::vector<float> cpdf;
+	cpdf.push_back(pdf[0]);
+	for (int i = 1; i < pdf.size(); i++)
+	{
+		float val = (cpdf.back() + pdf[i]);
+		cpdf.push_back(val);
+	}
+	std::vector<int> table;
+	for (int i = 0; i < pdf.size(); i++)
+	{
+		int val = (int) (255.0 * cpdf[i]);
+		table.push_back(val);
+	}
+
+	for (int i = 0; i < table.size(); i++) {
+		std::cout << i << " " << table[i] << " " << cpdf[i] << " " << cpdf[i]*255.0 <<"\n";
+	}
+	for (int i = 0; i < src.rows; i++) {
+		for (int j = 0; j < src.cols; j++) {
+			dst.at<char>(i, j) = table[ src.at<uchar>(i, j)];
+		}
+	}
+}
+
+void lab8Problem4()
+{
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		int height = src.rows;
+		int width = src.cols;
+		imshow("Source img", src);
+		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+
+		std::vector<int> histogram;
+		histogram = computeHistogram(src);
+		showHistogram("src histogram", histogram.data(), histogram.size(), 200);
+
+		histogramEqualization(src, dst);
+		imshow("dst", dst);
+
+
+		std::vector<int> histogram2;
+		histogram2 = computeHistogram(dst);
+		showHistogram("histogramEqualization", histogram2.data(), histogram2.size(), 200);
+		waitKey();
+	}
+}
+void applyFilter(int H[3][3], Mat src, Mat& dst, int sizeH = 3) {
+	int start = (sizeH - 1) / 2;
+
+	for (int i = start; i < src.rows - start; i++) {
+		for (int j = start; j < src.cols - start; j++) {
+			uchar pixel = src.at<uchar>(i, j);
+
+			float sum = 0;
+			float sPlus = 0;
+			float sMinus = 0;
+			float s = 0;
+			for (int u = 0; u < sizeH; u++) {
+				for (int v = 0; v < sizeH; v++) {
+					sum = sum + (H[u][v] * src.at<uchar>(i + u - start, j + v - start));
+					if (H[u][v] > 0) {
+						sPlus = sPlus + H[u][v];
+					}
+					else {
+						sMinus = sMinus - H[u][v];
+					}
+
+					if (sMinus > 0) {
+						s = (float)(1 / (2 * max(sPlus, sMinus)));
+					}
+					else {
+						s = sPlus;
+					}
+				}
+			}
+			float initSum = sum;
+			sum = sum / s;
+			if (sMinus == 0) {
+				dst.at < uchar >(i,j)= bound((int)floor(sum));
+			}
+			else {
+				dst.at<uchar>(i, j) = floor(s * initSum + 255 / 2);
+			}
+
+		}
+	}
+
+}
+
+void lab9Problem1() {
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+		int H[3][3] = {
+			-1, -1, -1, 
+			-1, 8, -1, 
+			-1, -1, -1, 
+		};
+		applyFilter(H, src, dst);
+		imshow("input image", src);
+		imshow("out", dst);
+		waitKey();
+	}
+}
+
+void lab9Problem2()
+{
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+		Mat src = imread(fname, IMREAD_GRAYSCALE);
+		Mat dst = Mat(src.rows, src.cols, CV_8UC1);
+		Mat dst2 = Mat(src.rows, src.cols, CV_8UC1);
+		Mat dst3 = Mat(src.rows, src.cols, CV_8UC1);
+
+		int H[3][3] = {
+			1, 1, 1,
+			1, 1,1,
+			1, 1, 1,
+		};
+		int H2[3][3] = {
+		0, 0, 0,
+		-1, 3, -1,
+		0, -1, 0,
+		};
+		int H3[3][3] = {
+		-1, -1, -1,
+		-1, 9, -1,
+		-1, -1, -1,
+		};
+		applyFilter(H, src, dst);
+		applyFilter(H2, src, dst2);
+		applyFilter(H3, src, dst3);
+
+		imshow("input image", src);
+		imshow("dst", dst);
+		imshow("dst2", dst2);
+		imshow("dst3", dst3);
+
+		waitKey();
+	}
+}
+
 int main()
 {
 	int  op;
@@ -1839,6 +2476,16 @@ int main()
 	functionSet.push_back(std::make_pair("showTwoPassLabeling", showTwoPassLabeling));
 	functionSet.push_back(std::make_pair("showBorderTracing", showBorderTracing));
 	functionSet.push_back(std::make_pair("showReconstruct", showReconstruct));
+	functionSet.push_back(std::make_pair("testBoundaryExtractionStudents", testBoundaryExtractionStudents));
+	functionSet.push_back(std::make_pair("testRegionFilling", testRegionFilling));
+	functionSet.push_back(std::make_pair("lab8Problem1", lab8Problem1));
+	functionSet.push_back(std::make_pair("lab8Problem2", lab8Problem2));
+	functionSet.push_back(std::make_pair("lab8Problem3", lab8Problem3));
+	functionSet.push_back(std::make_pair("lab8Problem4", lab8Problem4));
+	functionSet.push_back(std::make_pair("lab9Problem1", lab9Problem1));
+	functionSet.push_back(std::make_pair("lab9Problem2", lab9Problem2));
+
+
 
 
 
